@@ -1,0 +1,84 @@
+
+# Set Scope
+set_design_top rtl_top
+set_scope .
+
+# Create Required Power Domains
+create_power_domain top_PD
+create_power_domain Domain_1 -elements {CM}
+#write Domain_2(LFSR) here
+create_power_domain Domain_2 -elements {LFSR}
+############  complete create power domain for Domain_2	{LFSR} #############	
+
+# Create Supply Ports
+create_supply_port VDD_port -domain top_PD	
+
+# Create Supply Nets
+create_supply_net  VDD_rail -domain top_PD		
+
+create_supply_net  Vck_mx   -domain Domain_1
+create_supply_net  Vlfsr   -domain Domain_2
+############  complete supply net for domain 2, net name is Vlfsr #############
+
+create_supply_net  VSS_rail -domain Domain_1 -reuse
+create_supply_net  VSS_rail -domain Domain_2 -reuse
+############  complete supply net for domain 2	#############
+
+
+# Connect Supply Nets with ports
+connect_supply_net  VDD_rail -ports {VDD_port}
+connect_supply_net  VSS_rail -ports {VSS_port}
+
+
+# Set Primary Supply Nets for PDs
+set_domain_supply_net top_PD       -primary_power_net  VDD_rail  -primary_ground_net VSS_rail
+set_domain_supply_net Domain_1   -primary_power_net  Vck_mx    -primary_ground_net VSS_rail
+set_domain_supply_net Domain_2   -primary_power_net  Vlfsr    -primary_ground_net VSS_rail
+############  complete Primary Supply Nets Setting for domain 2	#############
+
+add_port_state VDD_port           -state {ON_STATE  0.99 1.10 1.21}
+add_port_state VSS_port           -state {ON_STATE 0 0 0}
+
+
+# Create Power Switches
+#1 Clock Mux
+create_power_switch clk_mux_SW \
+ -domain Domain_1 \
+ -input_supply_port  {vin1     VDD_rail} \
+ -output_supply_port {vout1    Vck_mx} \
+ -control_port       {ctr_sig1 ck_mx_sw_ctr} \
+ -on_state           {CK_MX_ON vin1 {ctr_sig1==0}} \
+ -off_state          {CK_MX_OFF   {ctr_sig1==1}}
+
+#2 LFSR
+create_power_switch lfsr_sw_ctr \
+ -domain Domain_2 \
+ -input_supply_port  {vin2     VDD_rail} \
+ -output_supply_port {vout2    Vlfsr} \
+ -control_port       {ctr_sig2 lfsr_sw_ctr} \
+ -on_state           {LFSR_ON vin2 {ctr_sig2==0}} \
+ -off_state          {LSFR_OFF   {ctr_sig2==1}}
+
+############  create_power_switch for domain 2	#############
+############  control port should be named as lfsr_sw_ctr
+
+# Create Isolation Control Logic
+
+#1 Clk Mux
+set_isolation iso_strategy1 -domain Domain_1  -isolation_power_net VDD_rail -isolation_ground_net VSS_rail -clamp_value 1 -applies_to inputs -elements {CM/sel_clk}
+set_isolation_control  iso_strategy1 -domain Domain_1 -isolation_signal iso1 -isolation_sense high
+
+#2 LFSR
+set_isolation iso_strategy2 -domain Domain_2  -isolation_power_net VDD_rail -isolation_ground_net VSS_rail -clamp_value 1 -applies_to inputs -elements {CM/sel_clk}
+set_isolation_control  iso_strategy2 -domain Domain_2 -isolation_signal iso2 -isolation_sense high
+
+#Create Retention Strategy
+set_retention ret_strategy2 -domain Domain_2 -retention_power_net VDD_rail -retention_ground_net VSS_rail
+set_retention_control ret_strategy2 -domain Domain_2 -save_signal {save_lfsr high} -restore_signal {restore_lfsr high}
+map_retention_cell ret_strategy2 -domain Domain_2 -lib_cell_type LIB_CELL_NAME
+
+
+
+###################################################
+################### END OF FILE ###################
+###################################################
